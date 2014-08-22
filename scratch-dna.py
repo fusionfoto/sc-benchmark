@@ -9,9 +9,8 @@ scratch-dna
     Backend support: localfile system / swift cluster(throught swift APIs)
 
 Usage:
-    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI [-d DIR]
-    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI -d DIR -A AUTH \
--U USER -K KEY [-C CONCURRENCY]
+    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI [-d DIR] [-A AUTH] \
+[-U USER] [-K KEY] [-C CONCURRENCY]
     scratch-dna.py -h | --help
 
 Options:
