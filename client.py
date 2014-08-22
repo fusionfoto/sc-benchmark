@@ -12,15 +12,18 @@ from geventhttpclient.url import URL
 class swiftclient(object):
 
     def __init__(self, auth_url, user, key,
-                 concurrency=10, timeout=120):
+                 concurrency=10, containers=1,
+                 connect_timeout=10, network_timeout=20):
         self.auth_user = user
         self.auth_key = key
         self.token = ''
         self.auth_url = auth_url
         self.storage_url = ''
 
+        self.containers = containers
         self.concurrency = concurrency
-        self.timeout = timeout
+        self.connect_timeout = connect_timeout
+        self.network_timeout = network_timeout
 
         self.start = 0
         self.elapsed = 0
@@ -47,30 +50,44 @@ class swiftclient(object):
         self.http.close()
         self.http = None
 
+    def put_containers(self, container):
+        for i in range(self.containers):
+            new_container = '%s_%.6d'% (container, i)
+            self.put(new_container)
+
     def put(self, container, name=None, content=None, concurrent=False):
         put_url = '%s/%s' % (self.storage_url, container)
         if name:
             put_url = '%s/%s' % (put_url, name)
 
+        if content:
+            headers = {'Content-Length': str(len(content)),
+                       'x-auth-token': self.token,
+                       'Content-Type': 'application/octet-stream'
+                       }
+        else:
+            headers = {'Content-Length': '0',
+                       'x-auth-token': self.token}
+
         url = URL(put_url)
         if self.http is None:
             self.http = HTTPClient.from_url(url,
-                                            headers={'x-auth-token': self.token},
+                                            headers=headers,
+                                            headers_type=dict,
                                             concurrency=self.concurrency,
-                                            connection_timeout=self.timeout,
-                                            network_timeout=self.timeout
+                                            connection_timeout=self.connect_timeout,
+                                            network_timeout=self.network_timeout
                                             )
 
         response = self.http.request('PUT',
                                      url.request_uri,
                                      body=content,
-                                     headers={'x-auth-token': self.token})
-
+                                     headers=headers)
         if response.status_code not in [201, 202]:
             self.err_count += 1
             sys.stdout.write('E%s' % response.status_code)
             sys.stdout.flush()
-#            print response.headers
+            print response.headers
             return
 
         sys.stdout.write('.')
@@ -89,15 +106,15 @@ class swiftclient(object):
             content = args[2](i)
             self.content_size += len(content)
             pool.spawn(func,
-                       args[0],
-                       '%s-%.6d' % (args[1], i),
+                       '%s_%.6d' % (args[0], (i % self.containers)),
+                       '%s_%.6d' % (args[1], i),
                        content,
-                       args[3])
+                       True)
 
         pool.join()
+        self.elapsed = time.time() - self.start
         self.http.close()
         self.http = None
-        self.elapsed = time.time() - self.start
 
     def report(self):
         print ''
@@ -122,11 +139,12 @@ if __name__ == '__main__':
     concurrency = 10
 
     client = swiftclient(auth_url,
-                         user,
-                         key,
-                         concurrency)
+                        user,
+                        key,
+                        concurrency)
     client.get_token()
 
-    client.put(container)
-    client.concurrent(objects, client.put, container, objname, content, True)
+    client.put_containers(container)
+    client.concurrent(objects, client.put, container, objname, content)
     client.report()
+

@@ -9,17 +9,18 @@ scratch-dna
     Backend support: localfile system / swift cluster(throught swift APIs)
 
 Usage:
-    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI [-d DIR] [-A AUTH] \
-[-U USER] [-K KEY] [-C CONCURRENCY]
+    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI [-d DIR] \
+[-n CONTAINERS] [-A AUTH] [-U USER] [-K KEY] [-C CONCURRENCY]
     scratch-dna.py -h | --help
 
 Options:
     -h --help       Show this screen.
-    -d DIR          Writable directory(container) [default: /tmp]
+    -d DIR          Writable directory(container name) [default: /tmp]
     -o OBJS         File(object) number
     -s SIZE         File(object) size
     -m SIZE_MULTI   Random File(object) size multiplier
 
+    -n CONTAINERS   Container number [default: 1]
     -A AUTH         Swift URL for obtaining an auth token
     -U USER         Swift User for obtaining an auth token
     -K KEY          Swift Key for obtaining an auth token
@@ -32,8 +33,7 @@ from docopt import docopt
 
 def main(numfiles, bytesize, maxmult, mydir,
          auth=None, user=None, key=None,
-         concurrency=None):
-
+         concurrency=None, containers=1):
     dnalist = list('ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT')
 
     kbytesize=float(bytesize)/1024
@@ -63,15 +63,19 @@ def main(numfiles, bytesize, maxmult, mydir,
         client = swiftclient(auth,
                             user,
                             key,
-                            concurrency)
+                            concurrency,
+                            containers)
         client.get_token()
-        client.put(container)
+        print '# PUT containers ',
+        client.put_containers(container)
+        print ''
 
     start = time.time()
     wbytes = 0.0
     nfiles = 0
 
     if auth:
+        print '# PUT objects ',
         client.concurrent( numfiles, client.put, container, objname, gen_fullstr, True)
         wbytes = client.content_size
         nfiles = numfiles
@@ -113,6 +117,7 @@ if __name__ == '__main__':
     size_multi = int(argv['-m'])
     directory = argv['-d']
 
+    containers = int(argv['-n'])
     auth = argv['-A'] or os.environ.get('ST_AUTH')
     user = argv['-U'] or os.environ.get('ST_USER')
     key = argv['-K'] or os.environ.get('ST_KEY')
@@ -120,7 +125,7 @@ if __name__ == '__main__':
 
     params = [objects, size, size_multi, directory]
     if auth and user and key:
-        params.extend([auth, user, key, concurrency])
+        params.extend([auth, user, key, concurrency, containers])
         backend = 'Swfit cluster (%s)' % auth
     else:
         backend = 'Local file system (%s)' % directory
