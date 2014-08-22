@@ -13,7 +13,7 @@ class swiftclient(object):
 
     def __init__(self, auth_url, user, key,
                  concurrency=10, containers=1,
-                 connect_timeout=10, network_timeout=20):
+                 connect_timeout=30, network_timeout=60):
         self.auth_user = user
         self.auth_key = key
         self.token = ''
