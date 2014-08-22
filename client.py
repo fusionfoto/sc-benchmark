@@ -8,17 +8,17 @@ import gevent.pool
 from geventhttpclient import HTTPClient
 from geventhttpclient.url import URL
 
+
 class swiftclient(object):
 
-    def __init__(self, server_ip, user, key,
+    def __init__(self, auth_url, user, key,
                  concurrency=10, timeout=120):
-        self.server_ip = server_ip
         self.auth_user = user
         self.auth_key = key
         self.token = ''
-        self.auth_url = 'http://%s/auth/v1.0' % self.server_ip
-        self.acct_url = 'http://%s/v1.0/AUTH_%s' % (self.server_ip,
-                                                    self.auth_user)
+        self.auth_url = auth_url
+        self.storage_url = ''
+
         self.concurrency = concurrency
         self.timeout = timeout
 
@@ -41,32 +41,34 @@ class swiftclient(object):
         assert response.status_code == 200
 
         self.token = response['x-auth-token']
+        self.storage_url = response['x-storage-url']
         #print 'TOKEN: %s' % self.token
+        #print 'URL: %s' % self.storage_url
         self.http.close()
         self.http = None
 
-    def put(self, container, name=None, content=None, concurrent=False ):
-        put_url='%s/%s' % (self.acct_url, container)
+    def put(self, container, name=None, content=None, concurrent=False):
+        put_url = '%s/%s' % (self.storage_url, container)
         if name:
-            put_url='%s/%s' % (put_url, name)
+            put_url = '%s/%s' % (put_url, name)
 
         url = URL(put_url)
         if self.http is None:
             self.http = HTTPClient.from_url(url,
-                                    headers = {'x-auth-token': self.token},
-                                    concurrency=self.concurrency,
-                                    connection_timeout=self.timeout,
-                                    network_timeout=self.timeout
-                                    )
+                                            headers={'x-auth-token': self.token},
+                                            concurrency=self.concurrency,
+                                            connection_timeout=self.timeout,
+                                            network_timeout=self.timeout
+                                            )
 
         response = self.http.request('PUT',
-                                url.request_uri,
-                                body=content,
-                                headers = {'x-auth-token': self.token})
+                                     url.request_uri,
+                                     body=content,
+                                     headers={'x-auth-token': self.token})
 
         if response.status_code not in [201, 202]:
             self.err_count += 1
-            sys.stdout.write('E%s'% response.status_code)
+            sys.stdout.write('E%s' % response.status_code)
             sys.stdout.flush()
 #            print response.headers
             return
@@ -78,8 +80,7 @@ class swiftclient(object):
             self.http.close()
             self.http = None
 
-
-    def concurrent(self, objects, func, *args ):
+    def concurrent(self, objects, func, *args):
         self.objects = objects
 
         self.start = time.time()
@@ -89,7 +90,7 @@ class swiftclient(object):
             self.content_size += len(content)
             pool.spawn(func,
                        args[0],
-                       '%s-%.6d'% (args[1], i),
+                       '%s-%.6d' % (args[1], i),
                        content,
                        args[3])
 
@@ -115,18 +116,17 @@ if __name__ == '__main__':
     objname = 'obj'
     content = lambda i: '12xxwerwerwer' * i
     objects = 100
-    api_ip = '192.168.200.101'
+    auth_url = 'http://192.168.200.101/auth/v1.0'
     user = 'swiftstack'
     key = 'swiftstack'
     concurrency = 10
 
-    client = swiftclient(api_ip,
+    client = swiftclient(auth_url,
                          user,
                          key,
                          concurrency)
     client.get_token()
 
     client.put(container)
-    client.concurrent( objects, client.put, container, objname, content, True)
+    client.concurrent(objects, client.put, container, objname, content, True)
     client.report()
-

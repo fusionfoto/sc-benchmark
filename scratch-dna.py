@@ -10,8 +10,8 @@ scratch-dna
 
 Usage:
     scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI [-d DIR]
-    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI -d DIR -i API_SERVER \
--u USER -k KEY [-c CONCURRENCY]
+    scratch-dna.py -o OBJS -s SIZE -m SIZE_MULTI -d DIR -A AUTH \
+-U USER -K KEY [-C CONCURRENCY]
     scratch-dna.py -h | --help
 
 Options:
@@ -21,10 +21,10 @@ Options:
     -s SIZE         File(object) size
     -m SIZE_MULTI   Random File(object) size multiplier
 
-    -i API_SERVER   Swift API IP
-    -u USER         Swift User
-    -k KEY          Swift User's password
-    -c CONCURRENCY  Concurrent processes [default: 10]
+    -A AUTH         Swift URL for obtaining an auth token
+    -U USER         Swift User for obtaining an auth token
+    -K KEY          Swift Key for obtaining an auth token
+    -C CONCURRENCY  Concurrent processes [default: 10]
 """
 
 import sys, os, time, random, socket
@@ -32,7 +32,7 @@ from client import swiftclient
 from docopt import docopt
 
 def main(numfiles, bytesize, maxmult, mydir,
-         api_ip=None, user=None, key=None,
+         auth=None, user=None, key=None,
          concurrency=None):
 
     dnalist = list('ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT')
@@ -58,10 +58,10 @@ def main(numfiles, bytesize, maxmult, mydir,
         fullstr = (str(i)+dnastr+hostname) * n
         return fullstr
 
-    if api_ip:
+    if auth:
         container = mydir.replace('/','_')
         objname = 'scr-file'
-        client = swiftclient(api_ip,
+        client = swiftclient(auth,
                             user,
                             key,
                             concurrency)
@@ -72,7 +72,7 @@ def main(numfiles, bytesize, maxmult, mydir,
     wbytes = 0.0
     nfiles = 0
 
-    if api_ip:
+    if auth:
         client.concurrent( numfiles, client.put, container, objname, gen_fullstr, True)
         wbytes = client.content_size
         nfiles = numfiles
@@ -104,7 +104,7 @@ def main(numfiles, bytesize, maxmult, mydir,
                                         wbytes/1048576.0/elapsed,
                                         nfiles/elapsed)
 
-    if api_ip:
+    if auth:
         client.report()
 
 if __name__ == '__main__':
@@ -114,14 +114,21 @@ if __name__ == '__main__':
     size_multi = int(argv['-m'])
     directory = argv['-d']
 
-    api_ip = argv['-i']
-    user = argv['-u']
-    key = argv['-k']
-    concurrency = int(argv['-c'])
+    auth = argv['-A'] or os.environ.get('ST_AUTH')
+    user = argv['-U'] or os.environ.get('ST_USER')
+    key = argv['-K'] or os.environ.get('ST_KEY')
+    concurrency = int(argv['-C'])
 
     params = [objects, size, size_multi, directory]
-    if api_ip:
-        params.extend([api_ip, user, key, concurrency])
+    if auth and user and key:
+        params.extend([auth, user, key, concurrency])
+        backend = 'Swfit cluster (%s)' % auth
+    else:
+        backend = 'Local file system (%s)' % directory
 
+    print ''
+    print '#' * 80
+    print '# Backend: %s #' % backend
+    print '#' * 80
+    print ''
     main(*params)
-
